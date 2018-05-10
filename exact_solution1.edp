@@ -1,0 +1,104 @@
+ofstream re("convergence.txt");
+//re.flush;
+//macro grad(u) [dx(u), dy(u)]  //EOM
+//macro prod([x1,x2],[y1,y2]) (x1*y1 + x2*y2) //EOM
+int n;
+real erru,h,xxx,xx=0;
+h=1.;
+for(int k=1;k<=7;k++)
+{
+n=2^k;
+h=h/2;
+// border G1(t=0,1){x=10*t;y=-1;label=1;}
+// border G2(t=0,1){x=10;y=-1+2*t;label=2;}
+// border G3(t=0,1){x=10-10*t;y=1;label=3;}
+// border G4(t=0,1){x=0;y=1-2*t;label=4;}
+// border C(t=0,2*pi){x=2+0.5*cos(t);y=0.5*sin(t);label=5;}
+// mesh Th=buildmesh(G1(5*n)+G2(n)+G3(5*n)+G4(n)+C(-3*n));
+mesh Th=square(n,n);
+fespace Xh(Th,P2);
+fespace Mh(Th,P1);
+Xh up1,up2,v2,v1,v,Told,T=0.5*pi*sin(2*pi*y);
+Xh u1 = -cos(pi*x)*sin(pi*y);
+Xh u2 = sin(pi*x)*cos(pi*y);
+Mh p,q;
+real epsr = 1e-8;
+real tf = 1./100;
+real Re=1.;
+func Te = 0.5*pi*sin(2*pi*y)*exp(-4*pi*pi*tf/Re);
+func u1e = -cos(pi*x)*sin(pi*y)*exp(-2*pi*pi*tf/Re);
+func u2e = sin(pi*x)*cos(pi*y)*exp(-2*pi*pi*tf/Re);
+int i=0;
+
+real t,dt=1e-5;
+real alpha=1./dt;
+//real Pr=1.;
+//real Ra=100.;
+Xh Qn,g1,g2,g3,g4,g5,g6,h1,h2,h3,h4; //= (1+1./Re)*2*pi*pi*pi*sin(2*pi*y)*exp((-4*pi*pi*t)/Re) + 0.5*pi*pi*sin(2*pi*x)*cos(2*pi*y)*exp((-6*pi*pi*t)/Re);
+//func g=4.*y*(1.-y);
+
+problem  NST (T,v,init=i) =
+    int2d(Th) ( alpha*(T*v) +  ( dx(T)*dx(v) +dy(T)*dy(v)))
+  - int2d(Th) ( Qn*v )
+  + int2d(Th) ( -alpha*convect([up1,up2],-dt,Told)*v)
+  + on(1,T=h1)
+  + on(2,T=h2)
+  + on(3,T=h3)
+  + on(4,T=h4)
+;
+
+problem  NS ([u1,u2,p],[v1,v2,q],init=i) =
+    int2d(Th)(
+             alpha*( u1*v1 + u2*v2)
+            + (1./Re) * ( dx(u1)*dx(v1) + dy(u1)*dy(v1)
+            +  dx(u2)*dx(v2) + dy(u2)*dy(v2) )
+            - p*q*epsr
+            - p*dx(v1) - p*dy(v2)
+            - dx(u1)*q - dy(u2)*q
+           )
+  + int2d(Th) ( -alpha*convect([up1,up2],-dt,up1)*v1 -alpha*convect([up1,up2],-dt,up2)*v2 )
+  - int2d(Th) ( T*v2)
+  //+ on(1,2,3,4,u1=0,u2=0)
+  + on(1,u1=0,u2=g1)
+  + on(2,u1=g2,u2=g3)
+  + on(3,u1=g4,u2=g5)
+  + on(4,u1=g6,u2=0)
+;
+
+for (i=0;i<=(tf/dt);i++)
+ {
+ 	t=i*dt;
+ 	Qn = (1.-1./Re)*2*pi*pi*pi*sin(2*pi*y)*exp((-4*pi*pi*t)/Re) + pi*pi*sin(pi*x)*cos(pi*y)*cos(2*pi*y)*exp((-6*pi*pi*t)/Re);
+ 	//func Te = 0.5*pi*sin(2*pi*y)*exp(-4*pi*pi*t/Re);
+ 	g1 = sin(pi*x)*exp(-2*pi*pi*t/Re);
+ 	g2 = -cos(pi)*sin(pi*y)*exp(-2*pi*pi*t/Re);
+ 	g3 = sin(pi)*cos(pi*y)*exp(-2*pi*pi*t/Re);
+ 	g4 = -cos(pi*x)*sin(pi)*exp(-2*pi*pi*t/Re);
+ 	g5 = sin(pi*x)*cos(pi)*exp(-2*pi*pi*t/Re);
+ 	g6 = -sin(pi*y)*exp(-2*pi*pi*t/Re);
+ 	h1 = 0;
+ 	h2 = 0.5*pi*sin(2*pi*y)*exp(-4*pi*pi*t/Re);
+ 	h3 = 0.5*pi*sin(2*pi)*exp(-4*pi*pi*t/Re);
+ 	h4 = 0.5*pi*sin(2*pi*y)*exp(-4*pi*pi*t/Re);
+	Told=T;
+	up1=u1;
+	up2=u2;
+	NST;
+	NS;
+     //plot(T,fill)
+}
+Xh deltau1=u1-u1e;
+Xh deltau2=u2-u2e;
+erru = sqrt(int2d(Th)(deltau1*deltau1 + deltau2*deltau2 + (1./Re)*dt*(dx(deltau1)*dx(deltau1) + dy(deltau1)*dy(deltau1) + dx(deltau2)*dx(deltau2) + dy(deltau2)*dy(deltau2))));
+//re<<erru<<endl;
+//Xh Tee=Te;
+//plot(Tee,fill=0);
+Xh delta = T-Te;
+//xxx = xx;
+xx = sqrt(int2d(Th)((delta)^2 + dt*(dx(delta)*dx(delta)+dy(delta)*dy(delta))));
+//if ( k > 1 )
+//{
+	 re << h << "\t"<< xx << "\t" << erru << endl;
+//}
+;
+}
